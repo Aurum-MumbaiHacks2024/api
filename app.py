@@ -4,14 +4,22 @@ import pandas as pd
 import numpy as np
 from tensorflow import keras
 import joblib
+import sqlite3
 
 app = FastAPI()
+ipo = sqlite3.connect('ipo_data.db')
+ipo.row_factory = sqlite3.Row
+cursor_ipo = ipo.cursor()
+
+investments = sqlite3.connect('investments.db')
+investments.row_factory = sqlite3.Row
+cursor_investments = investments.cursor()
 
 model = keras.models.load_model('my_model.h5')
 scaler = joblib.load('imputer.pkl')
 imputer = joblib.load('scaler.pkl')
 
-class InputData(BaseModel):
+class predictData(BaseModel):
     Issue_Size_crores: float
     QIB: float
     HNI: float
@@ -19,8 +27,15 @@ class InputData(BaseModel):
     Issue_price: float
     Age: float
 
+class getIPO(BaseModel):
+    term: str
+
+class getMF(BaseModel):
+    term: str
+    budget: str
+
 @app.post("/predict")
-async def predict(input_data: InputData):
+async def predict(input_data: predictData):
     try:
         input_df = pd.DataFrame([input_data.dict()])
 
@@ -47,42 +62,35 @@ async def predict(input_data: InputData):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-q2_issue_size = 488.265
-q3_issue_size = 1100.0
-q2_issue_price = 248.0
-q3_issue_price = 530.75
-q2_units = 18.265
-q3_units = 128.015
+@app.post("/get_ipo")
+async def get_ipo(input_data: getIPO):
+    try:
+        query = "SELECT * FROM ipo_details WHERE Value = ? ORDER BY RANDOM() LIMIT 4"
+        cursor_ipo.execute(query, (input_data.term,))
 
-# Define the input data model for the classification request
-class ClassificationRequest(BaseModel):
-    issue_size: float
-    issue_price: float
+        rows = cursor_ipo.fetchall()
+        print("Fetched Rows:", rows)
 
-# Define the function to classify based on thresholds
-def classify_new_row(issue_size, issue_price):
-    # Calculate Total Units as issue_size / issue_price
-    total_units = issue_size / issue_price
+        results = [dict(row) for row in rows]
 
-    # Apply the rules to classify
-    if total_units > q3_units and issue_size > q3_issue_size:
-        return 'short term'
-    elif total_units < q2_units and issue_size > q3_issue_size:
-        return 'long term'
-    elif total_units > q3_units and issue_price < q2_issue_price:
-        return 'short term'
-    elif total_units < q2_units and issue_price < q2_issue_price:
-        return 'neutral'
-    else:
-        return 'unknown'
+        return {"ipo_details": results}
 
-# Define the classification endpoint
-@app.post("/classify")
-async def classify(request: ClassificationRequest):
-    issue_size = request.issue_size
-    issue_price = request.issue_price
+    except sqlite3.Error as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-    # Classify based on input
-    classification = classify_new_row(issue_size, issue_price)
-    return {"classification": classification}
 
+@app.post("/get_mf")
+async def get_mf(input_data: getMF):
+    try:
+        query = "SELECT * FROM investment_nav WHERE `Investment Horizon` = ? and NAV_Category = ? ORDER BY RANDOM() LIMIT 4"
+        cursor_investments.execute(query, (input_data.term,input_data.budget))
+
+        rows = cursor_investments.fetchall()
+        print("Fetched Rows:", rows)
+
+        results = [dict(row) for row in rows]
+
+        return {"mf_details": results}
+
+    except sqlite3.Error as e:
+        raise HTTPException(status_code=500, detail=str(e))
