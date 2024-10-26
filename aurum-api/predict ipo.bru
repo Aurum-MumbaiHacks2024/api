@@ -1,0 +1,22 @@
+meta {
+  name: predict ipo
+  type: http
+  seq: 2
+}
+
+post {
+  url: 127.0.0.1:8000/predict
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+      "Issue_Size_crores": 500.0,
+      "QIB": 150.0,
+      "HNI": 100.0,
+      "RII": 50.0,
+      "Issue_price": 350.0,
+      "Age": 5.0
+  }
+}
